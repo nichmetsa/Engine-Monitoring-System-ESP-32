@@ -6,124 +6,109 @@
 
 BluetoothSerial SerialBT;
 
-#include <MAX6675Soft.h>
+//Defining constants for the rest of the code
+#include <max6675.h>
 
 //LED PINS
-const byte ledG = 13; //GREEN
-const byte ledY = 12; //YELLOW
-const byte ledR = 14; //RED
-
-/*
-MAX6675Soft(cs, so, sck)
-cs  - chip select
-so  - serial data output
-sck - serial clock input
-*/
-
-MAX6675Soft thermocoupleoleo(2, 4, 15);
-MAX6675Soft thermocouplecab(17, 5, 16);
-
+const byte led_green = 13; //GREEN
+const byte led_yellow = 12; //YELLOW
+const byte led_red = 14; //RED
 
 //temperature of the oil OIL
-const byte dangerTEMPoleo = 80;
-const byte maxTEMPoleo = 100;
+const byte danger_temp_oil = 80;
+const byte max_temp_oil = 100;
 
 //temp CYLINDER HEAD
-const byte dangerTEMPcab = 160;
-const byte maxTEMPcab = 200;
+const byte danger_temp_head = 160;
+const byte max_temp_head = 200;
 
 //time intervals
-unsigned long previousMillis = 0;
 const long interval = 300;
 
-//RPMS
-const int maxRPM = 4000;
-const int medRPM = 2000;
-const int minRPM = 850;
-float temperaturaoleo = 25;
-float temperaturacab = 25;
-int RPM = 0;
+//oil sensors
+int thermo_oil_CLK = 5;//12;
+int thermo_oil_CS = 17;//14;
+int thermo_oil_DO = 16;//27;
+float temp_oil;
 
-void setup() {
+//for sensor 2
+int thermo_head_CLK = 4;//26;
+int thermo_head_CS = 2;//25;
+int thermo_head_DO = 15;//33;
+float temp_head;
+
+MAX6675 thermocouple_oil(thermo_oil_CLK, thermo_oil_CS, thermo_oil_DO);
+MAX6675 thermocouple_head(thermo_head_CLK, thermo_head_CS, thermo_head_DO);
+
+int i;
+
+void setup()
+{
   Serial.begin(115200);
-  SerialBT.begin("ESP32test"); //Bluetooth device name
+  SerialBT.begin("ECU-Fusca"); //Bluetooth device name
   SerialBT.println("The device started, now you can pair it with bluetooth!");
-  Serial.println();
-  pinMode(ledR, OUTPUT);
-  pinMode(ledG, OUTPUT);
-  pinMode(ledY, OUTPUT);
+  SerialBT.println();
+  pinMode(led_green, OUTPUT);
+  pinMode(led_green, OUTPUT);
+  pinMode(led_yellow, OUTPUT);
 
   //TO SHOW THAT ALL LEDS ARE WORKING
-  digitalWrite(ledG, LOW);
-  digitalWrite(ledY, LOW);
-  digitalWrite(ledR, HIGH);
+  digitalWrite(led_green, LOW);
+  digitalWrite(led_yellow, LOW);
+  digitalWrite(led_red, HIGH);
   delay(1000);
-  digitalWrite(ledR, LOW);
-  digitalWrite(ledG, HIGH);
+  digitalWrite(led_red, LOW);
+  digitalWrite(led_green, HIGH);
   delay(1000);
-  digitalWrite(ledG, LOW);
-  digitalWrite(ledY, HIGH);
+  digitalWrite(led_green, LOW);
+  digitalWrite(led_yellow, HIGH);
   delay(1000);
-  digitalWrite(ledY, LOW);
-
-  thermocoupleoleo.begin();
-  thermocouplecab.begin();
-
-  while (thermocoupleoleo.getChipID() != MAX6675_ID)
-  {
-    SerialBT.println(F("MAX6675 Oleo error")); //(F()) saves string to flash & keeps dynamic memory free
-    delay(5000);
-  }
-  SerialBT.println(F("MAX6675 Oleo OK"));
-
-  
-  while (thermocouplecab.getChipID() != MAX6675_ID)
-  {
-    SerialBT.println(F("MAX6675 Cabeçote error")); //(F()) saves string to flash & keeps dynamic memory free
-    delay(5000);
-  }
-  SerialBT.println(F("MAX6675 Cabeçote OK"));
-
-  SerialBT.println("oil,cylinderhead,");
-  
+  digitalWrite(led_yellow, LOW);
   delay(1000);
 }
 
-void loop() {
+void loop()
+{
   
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
-    float temperaturaoleo = thermocoupleoleo.getTemperature(thermocoupleoleo.readRawData());
-    float temperaturacab = thermocouplecab.getTemperature(thermocouplecab.readRawData());
-    SerialBT.print(temperaturaoleo);
-    SerialBT.print(",");
-    SerialBT.print(temperaturacab);
-    SerialBT.print(",");
-    SerialBT.println();
-    Serial.print(temperaturaoleo);
-    Serial.print(",");
-    Serial.print(temperaturacab);
-    Serial.print(",");
-    Serial.println();
+  float avg_oil = 0;
+  float avg_head = 0;
+  
+  for(i=0;i<6;i++)
+  {
+    temp_oil = thermocouple_oil.readCelsius();
+    temp_head = thermocouple_head.readCelsius();
+    avg_oil = avg_oil + temp_oil;
+    avg_head = avg_head + temp_head;
+    delay(interval);
   }
 
-  if (temperaturaoleo > maxTEMPoleo || temperaturacab > maxTEMPcab)
+  SerialBT.print(temp_oil);
+  SerialBT.print(",");
+  SerialBT.print(temp_head);
+  SerialBT.print(",");
+  SerialBT.println();
+  Serial.print(temp_oil);
+  Serial.print(",");
+  Serial.print(temp_head);
+  Serial.print(",");
+  Serial.println();
+  
+  if (avg_oil > max_temp_oil || avg_head > max_temp_head)
   {
-    digitalWrite(ledR, HIGH);
-    digitalWrite(ledG, LOW);
-    digitalWrite(ledY, LOW);
+    digitalWrite(led_red, HIGH);
+    digitalWrite(led_green, LOW);
+    digitalWrite(led_yellow, LOW);
   }
-  else if (temperaturaoleo > dangerTEMPoleo || temperaturacab > dangerTEMPcab)
+  else if (avg_oil > danger_temp_oil || avg_head > danger_temp_head)
   {
-    digitalWrite(ledR, LOW);
-    digitalWrite(ledG, LOW);
-    digitalWrite(ledY, HIGH);
+    digitalWrite(led_red, LOW);
+    digitalWrite(led_green, LOW);
+    digitalWrite(led_yellow, HIGH);
   }
   else
   {
-    digitalWrite(ledR, LOW);
-    digitalWrite(ledG, HIGH);
-    digitalWrite(ledY, LOW);
+    digitalWrite(led_red, LOW);
+    digitalWrite(led_green, HIGH);
+    digitalWrite(led_yellow, LOW);
   }
 }
